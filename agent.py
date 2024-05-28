@@ -26,7 +26,7 @@ INTRO = "Hello, I am KITT, a friendly voice assistant powered by LiveKit Agents.
         Feel free to ask me anything — I'm here to help! Just start talking or type in the chat."
 SIP_INTRO = "Hello, I am KITT, a friendly voice assistant powered by LiveKit Agents. \
              Feel free to ask me anything — I'm here to help! Just start talking."
-SIP_ZH = "你好, 我是你的教学老师."
+SIP_ZH = "你好."
 
 
 async def entrypoint(job: JobContext):

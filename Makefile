@@ -1,12 +1,13 @@
-.PHONY: agent
+.PHONY: start-agent start-agent
 
-livekit-server:
-	@echo "Killing livekit server listening on port 7880..."
-	@-pkill -f 'livekit-server' || true
-	nohup livekit-server --dev &
+kill-agents:
+	@echo "Killing all agents..."
+	@pgrep -f 'agent.py' | grep -v grep | grep -v make | xargs -r kill -9
+	@sleep 1
+	@echo "Checking for remaining instances of agent..."
 
-agent: livekit-server
-	python agent.py start --log-level=INFO
+start-agent:
+	nohup python agent.py start &
 
 .PHONY: format
 format:

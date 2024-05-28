@@ -11,32 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from .llm import LLM
-from .models import TTSModels, TTSVoices, WhisperModels
-from .stt import STT
-from .tts import TTS
-from .version import __version__
-
-__all__ = [
-    "STT",
-    "TTS",
-    "LLM",
-    "WhisperModels",
-    "TTSModels",
-    "TTSVoices",
-    "__version__",
-]
-
-from livekit.agents import Plugin
-
-
-class OpenAIPlugin(Plugin):
-    def __init__(self) -> None:
-        super().__init__(__name__, __version__, __package__)
-
-    def download_files(self) -> None:
-        pass
-
-
-Plugin.register_plugin(OpenAIPlugin())
