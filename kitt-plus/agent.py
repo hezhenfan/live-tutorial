@@ -13,7 +13,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
 )
-from plugins.asr.asr import STT
+from plugins.asr import STT
 from state_manager import StateManager
 
 

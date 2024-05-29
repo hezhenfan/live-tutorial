@@ -13,8 +13,8 @@ load_dotenv()
 from attr import define
 from livekit import agents, rtc
 from livekit.agents.llm import ChatContext, ChatMessage, ChatRole
-from plugins.tts.tts import TTS
-from plugins.llm.llm import LLM
+from plugins.tts import TTS
+from plugins.llm import LLM
 
 
 logger = logging.getLogger("kitt plus.inference-job")
