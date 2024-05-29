@@ -1,4 +1,4 @@
-.PHONY: start-agent start-agent
+.PHONY: start-kitt kill-agents
 
 kill-agents:
 	@echo "Killing all agents..."
@@ -6,8 +6,11 @@ kill-agents:
 	@sleep 1
 	@echo "Checking for remaining instances of agent..."
 
-start-agent:
-	nohup python agent.py start &
+start-kitt:
+	nohup python kitt-plus/agent.py start >> kitt.log 2>&1 &
+
+start-avatar:
+	nohup python ai-avatar/agent.py start >> avatar.log 2>&1 &
 
 .PHONY: format
 format:
