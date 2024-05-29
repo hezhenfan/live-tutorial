@@ -32,7 +32,9 @@ SIP_ZH = "你好."
 async def entrypoint(job: JobContext):
     # LiveKit Entities
     source = rtc.AudioSource(24000, 1)
+    video_source = rtc.VideoSource(640, 480)
     track = rtc.LocalAudioTrack.create_audio_track("agent-mic", source)
+    video_track = rtc.LocalVideoTrack.create_video_track("agent-cam", video_source)
     options = rtc.TrackPublishOptions()
     options.source = rtc.TrackSource.SOURCE_MICROPHONE
 
@@ -129,21 +131,12 @@ async def entrypoint(job: JobContext):
     async def stt_stream_task():
         nonlocal current_transcription, inference_task
         async for stt_event in stt_stream:
-            # We eagerly try to run inference to keep the latency as low as possible.
-            # If we get a new transcript, we update the working text, cancel in-flight inference,
-            # and run new inference.
-            if stt_event.type == agents.stt.SpeechEventType.FINAL_TRANSCRIPT:
-                delta = stt_event.alternatives[0].text
-                # Do nothing
-                if delta == "":
-                    continue
-                current_transcription += " " + delta
-                # Cancel in-flight inference
-                if inference_task:
-                    inference_task.cancel()
-                    await inference_task
-                # Start new inference
-                inference_task = asyncio.create_task(start_new_inference())
+            pass
+
+    async def video_capture_task():
+        while True:
+            video_frame = await stt_stream.output_queue.get()
+            video_source.capture_frame(video_frame)
 
     try:
         sip = job.room.name.startswith("sip")
@@ -151,7 +144,7 @@ async def entrypoint(job: JobContext):
         inference_task = asyncio.create_task(start_new_inference(force_text=intro_text))
         async with asyncio.TaskGroup() as tg:
             tg.create_task(audio_stream_task())
-            tg.create_task(stt_stream_task())
+            tg.create_task(video_capture_task())
     except BaseExceptionGroup as e:
         for exc in e.exceptions:
             print("Exception: ", exc)
