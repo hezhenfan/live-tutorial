@@ -1,7 +1,6 @@
 import asyncio
 import json
 import time
-from builtins import BaseExceptionGroup
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -14,7 +13,11 @@ from livekit.agents import (
     WorkerOptions,
     cli,
 )
-from plugins.asr import STT
+
+import os
+import sys
+sys.path.append(os.getcwd())
+from plugins.avatar import STT
 from state_manager import StateManager
 
 
@@ -33,14 +36,16 @@ SIP_ZH = "你好."
 async def entrypoint(job: JobContext):
     # LiveKit Entities
     source = rtc.AudioSource(24000, 1)
-    video_source = rtc.VideoSource(640, 480)
+    video_source = rtc.VideoSource(512, 512)
     track = rtc.LocalAudioTrack.create_audio_track("agent-mic", source)
     video_track = rtc.LocalVideoTrack.create_video_track("agent-cam", video_source)
     options = rtc.TrackPublishOptions()
     options.source = rtc.TrackSource.SOURCE_MICROPHONE
+    options_video = rtc.TrackPublishOptions()
+    options_video.source = rtc.TrackSource.SOURCE_CAMERA
 
     # Plugins
-    stt = STT(language="zh-CN")
+    stt = STT()
     stt_stream = stt.stream()
 
     # Agent state
@@ -83,6 +88,7 @@ async def entrypoint(job: JobContext):
 
     # Publish agent mic after waiting for user audio (simple way to avoid subscribing to self)
     await job.room.local_participant.publish_track(track, options)
+    await job.room.local_participant.publish_track(video_track, options_video)
 
     async def start_new_inference(force_text: str | None = None):
         nonlocal current_transcription
@@ -147,7 +153,7 @@ async def entrypoint(job: JobContext):
 
 
 async def request_fnc(req: JobRequest) -> None:
-    await req.accept(entrypoint, auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
+    await req.accept(entrypoint, auto_subscribe=agents.AutoSubscribe.SUBSCRIBE_ALL)
 
 
 if __name__ == "__main__":
