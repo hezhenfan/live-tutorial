@@ -128,20 +128,12 @@ async def entrypoint(job: JobContext):
         async for audio_frame_event in audio_stream:
             stt_stream.push_frame(audio_frame_event.frame)
 
-    async def stt_stream_task():
-        nonlocal current_transcription, inference_task
-        async for stt_event in stt_stream:
-            pass
-
     async def video_capture_task():
         while True:
             video_frame = await stt_stream.output_queue.get()
             video_source.capture_frame(video_frame)
 
     try:
-        sip = job.room.name.startswith("sip")
-        intro_text = SIP_ZH if sip else SIP_ZH
-        inference_task = asyncio.create_task(start_new_inference(force_text=intro_text))
         async with asyncio.TaskGroup() as tg:
             tg.create_task(audio_stream_task())
             tg.create_task(video_capture_task())
