@@ -20,103 +20,28 @@ import io
 import json
 import logging
 import os
+import uuid
 import wave
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import List
 from urllib.parse import urlencode
-from typing import Literal
+import cv2
 
 import aiohttp
+import numpy as np
 from livekit import rtc
 from livekit.agents import stt
 from livekit.agents.utils import AudioBuffer, merge_frames
 
-DeepgramModels = Literal[
-    "nova-general",
-    "nova-phonecall",
-    "nova-meeting",
-    "nova-2-general",
-    "nova-2-meeting",
-    "nova-2-phonecall",
-    "nova-2-finance",
-    "nova-2-conversationalai",
-    "nova-2-voicemail",
-    "nova-2-video",
-    "nova-2-medical",
-    "nova-2-drivethru",
-    "nova-2-automotive",
-    "enhanced-general",
-    "enhanced-meeting",
-    "enhanced-phonecall",
-    "enhanced-finance",
-    "base",
-    "meeting",
-    "phonecall",
-    "finance",
-    "conversationalai",
-    "voicemail",
-    "video",
-    "whisper-tiny",
-    "whisper-base",
-    "whisper-small",
-    "whisper-medium",
-    "whisper-large",
-]
-
-
-DeepgramLanguages = Literal[
-    "zh",
-    "zh-CN",
-    "zh-TW",
-    "da",
-    "nl",
-    "en",
-    "en-US",
-    "en-AU",
-    "en-GB",
-    "en-NZ",
-    "en-IN",
-    "fr",
-    "fr-CA",
-    "de",
-    "hi",
-    "hi-Latn",
-    "pt",
-    "pt-BR",
-    "es",
-    "es-419",
-    "hi",
-    "hi-Latn",
-    "it",
-    "ja",
-    "ko",
-    "no",
-    "pl",
-    "pt",
-    "pt-BR",
-    "es-LATAM",
-    "sv",
-    "ta",
-    "taq",
-    "uk",
-    "tr",
-    "sv",
-    "id",
-    "pt",
-    "pt-BR",
-    "ru",
-    "th",
-]
-
 
 @dataclass
 class STTOptions:
-    language: DeepgramLanguages | str | None
+    language: str
     detect_language: bool
     interim_results: bool
     punctuate: bool
-    model: DeepgramModels
+    model: str
     smart_format: bool
     endpointing: int | None
 
@@ -125,12 +50,12 @@ class STT(stt.STT):
     def __init__(
         self,
         *,
-        language: DeepgramLanguages = "en-US",
+        language = "en-US",
         detect_language: bool = False,
         interim_results: bool = True,
         punctuate: bool = True,
         smart_format: bool = True,
-        model: DeepgramModels = "nova-2-general",
+        model = "nova-2-general",
         api_key: str | None = None,
         min_silence_duration: int = 100,  # 100ms for a RTC app seems like a strong default
     ) -> None:
@@ -154,7 +79,7 @@ class STT(stt.STT):
         self,
         *,
         buffer: AudioBuffer,
-        language: DeepgramLanguages | str | None = None,
+        language = None,
     ) -> stt.SpeechEvent:
         config = self._sanitize_options(language=language)
 
@@ -198,7 +123,7 @@ class STT(stt.STT):
     def stream(
         self,
         *,
-        language: DeepgramLanguages | str | None = None,
+        language = None,
     ) -> "SpeechStream":
         config = self._sanitize_options(language=language)
         return SpeechStream(config, api_key=self._api_key)
@@ -220,6 +145,8 @@ class STT(stt.STT):
 class SpeechStream(stt.SpeechStream):
     _KEEPALIVE_MSG: str = json.dumps({"type": "KeepAlive"})
     _CLOSE_MSG: str = json.dumps({"type": "CloseStream"})
+    temp_wav = '/home/ecs-user/code/ai-livetutorial/ai-avatar/plugins/wav/'
+    temp_avi = '/home/ecs-user/code/ai-livetutorial/ai-avatar/plugins/avi/'
 
     def __init__(
         self,
@@ -243,6 +170,8 @@ class SpeechStream(stt.SpeechStream):
         self._session = aiohttp.ClientSession()
         self._queue = asyncio.Queue[rtc.AudioFrame | str]()
         self.output_queue = asyncio.Queue[rtc.VideoFrame | str]()
+        self._wav_queue = asyncio.Queue[str]()
+        self._avi_queue = asyncio.Queue[str]()
         self._event_queue = asyncio.Queue[stt.SpeechEvent | None]()
         self._closed = False
         self._main_task = asyncio.create_task(self._run(max_retry))
@@ -333,22 +262,12 @@ class SpeechStream(stt.SpeechStream):
 
         closing_ws = False
 
-        async def keepalive_task():
-            # if we want to keep the connection alive even if no audio is sent,
-            # Deepgram expects a keepalive message.
-            # https://developers.deepgram.com/reference/listen-live#stream-keepalive
-            try:
-                while True:
-                    await ws.send_str(SpeechStream._KEEPALIVE_MSG)
-                    await asyncio.sleep(5)
-            except Exception:
-                pass
-
         async def send_task():
             nonlocal closing_ws
             # forward inputs to deepgram
             # if we receive a close message, signal it to deepgram and break.
             # the recv task will then make sure to process the remaining audio and stop
+            all_bytes=b''
             while True:
                 data = await self._queue.get()
                 self._queue.task_done()
@@ -359,8 +278,18 @@ class SpeechStream(stt.SpeechStream):
                     frame = data.remix_and_resample(
                         self._sample_rate, self._num_channels
                     )
+                    all_bytes += frame.data.tobytes()
+                    if len(all_bytes) > 500_000:
+                        wav_file = f'{uuid.uuid4().hex}.wav'
+                        with wave.open(wav_file, 'wb') as f:
+                            f.setnchannels(1)
+                            f.setsampwidth(2)
+                            f.setframerate(16000)
+                            f.writeframes(all_bytes)
+                        self._wav_queue.put_nowait(wav_file)
+                        all_bytes = b''
                     # logging.getLogger().info(f'发送给ＳＴＴ的数据：{frame.data.tobytes()}')
-                    await ws.send_bytes(frame.data.tobytes())
+                    # await ws.send_bytes(frame.data.tobytes())
                 elif data == SpeechStream._CLOSE_MSG:
                     closing_ws = True
                     logging.getLogger().info(f'发送给ＳＴＴ的数据：{data}')
@@ -370,32 +299,35 @@ class SpeechStream(stt.SpeechStream):
         async def recv_task():
             nonlocal closing_ws
             while True:
-                msg = await ws.receive()
-                if msg.type in (
-                    aiohttp.WSMsgType.CLOSED,
-                    aiohttp.WSMsgType.CLOSE,
-                    aiohttp.WSMsgType.CLOSING,
-                ):
-                    if closing_ws:  # close is expected, see SpeechStream.aclose
-                        return
+                data = await self._wav_queue.get()
+                self._wav_queue.task_done()
+                if isinstance(data, str):
+                    video_file = self.temp_avi + f'{uuid.uuid4().hex}.avi'
+                    try:
+                        inference(data, video_file)
+                    except Exception as e:
+                        logging.error(f"failed to process audio: {e}")
+                    self._avi_queue.put_nowait(video_file)
 
-                    raise Exception(
-                        "deepgram connection closed unexpectedly"
-                    )  # this will trigger a reconnection, see the _run loop
+        async def video_frame_task():
+            while True:
+                data = await self._avi_queue.get()
+                self._avi_queue.task_done()
+                if isinstance(data, str):
+                    cap = cv2.VideoCapture(data)
+                    while True:
+                        ret, rgb_frame = cap.read()
+                        if not ret:
+                            break
+                        height, width, _ = rgb_frame.shape
+                        rgba_array = np.zeros((height, width, 4), dtype=np.uint8)
+                        rgba_array[:, :, :3] = rgb_frame
+                        rgba_array[:, :, 3] = 255
+                        frame = rtc.VideoFrame(height, width, rtc.VideoBufferType.BGRA, rgba_array.tobytes())
+                        self.output_queue.put_nowait(frame)
+                    cap.release()
 
-                if msg.type != aiohttp.WSMsgType.TEXT:
-                    logging.warning("unexpected deepgram message type %s", msg.type)
-                    continue
-
-                try:
-                    # received a message from deepgram
-                    data = json.loads(msg.data)
-                    logging.getLogger().info(f'从STT接收的数据：{data}')
-                    self._process_stream_event(data)
-                except Exception as e:
-                    logging.error(f"failed to process deepgram message: {e}")
-
-        await asyncio.gather(send_task(), recv_task(), keepalive_task())
+        await asyncio.gather(send_task(), recv_task(), video_frame_task())
 
     def _end_speech(self) -> None:
         if not self._speaking:

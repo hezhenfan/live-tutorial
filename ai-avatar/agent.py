@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from builtins import BaseExceptionGroup
 
 from dotenv import load_dotenv
@@ -132,6 +133,7 @@ async def entrypoint(job: JobContext):
         while True:
             video_frame = await stt_stream.output_queue.get()
             video_source.capture_frame(video_frame)
+            time.sleep(0.04)
 
     try:
         async with asyncio.TaskGroup() as tg:
