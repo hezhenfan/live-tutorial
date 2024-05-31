@@ -91,7 +91,7 @@ class SpeechStream:
 
     async def aclose(self, wait: bool = True) -> None:
         self._closed = True
-        self._queue.put_nowait(None)
+        self._queue.put_nowait('')
 
         if not wait:
             self._main_task.cancel()

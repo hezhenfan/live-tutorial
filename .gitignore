@@ -162,3 +162,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 nohup.out
+
+ai-avatar/plugins/audio2secc_deploy/
+ai-avatar/plugins/wav/
+ai-avatar/plugins/avi/

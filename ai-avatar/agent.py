@@ -1,11 +1,11 @@
 import asyncio
 import json
+import logging
 import time
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from inference_job import EventType, InferenceJob
 from livekit import agents, rtc
 from livekit.agents import (
     JobContext,
@@ -59,19 +59,6 @@ async def entrypoint(job: JobContext):
         if track.kind == rtc.TrackKind.KIND_AUDIO:
             audio_stream_future.set_result(rtc.AudioStream(track))
 
-    def on_data(dp: rtc.DataPacket):
-        nonlocal current_transcription
-        print("Data received: ", dp)
-        # Ignore if the agent is speaking
-        if state.agent_speaking:
-            return
-        if dp.topic != "lk-chat-topic":
-            return
-        payload = json.loads(dp.data)
-        message = payload["message"]
-        current_transcription = message
-        asyncio.create_task(start_new_inference())
-
     for participant in job.room.participants.values():
         for track_pub in participant.tracks.values():
             # This track is not yet subscribed, when it is subscribed it will
@@ -81,7 +68,6 @@ async def entrypoint(job: JobContext):
             audio_stream_future.set_result(rtc.AudioStream(track_pub.track))
 
     job.room.on("track_subscribed", on_track_subscribed)
-    job.room.on("data_received", on_data)
 
     # Wait for user audio
     audio_stream = await audio_stream_future
@@ -90,49 +76,11 @@ async def entrypoint(job: JobContext):
     await job.room.local_participant.publish_track(track, options)
     await job.room.local_participant.publish_track(video_track, options_video)
 
-    async def start_new_inference(force_text: str | None = None):
-        nonlocal current_transcription
-
-        state.agent_thinking = True
-        job = InferenceJob(
-            transcription=current_transcription,
-            audio_source=source,
-            chat_history=state.chat_history,
-            force_text_response=force_text,
-        )
-
-        try:
-            agent_done_thinking = False
-            agent_has_spoken = False
-            comitted_agent = False
-
-            def commit_agent_text_if_needed():
-                nonlocal agent_has_spoken, agent_done_thinking, comitted_agent
-                if agent_done_thinking and agent_has_spoken and not comitted_agent:
-                    comitted_agent = True
-                    state.commit_agent_response(job.current_response)
-
-            async for e in job:
-                # Allow cancellation
-                if e.type == EventType.AGENT_RESPONSE:
-                    if e.finished_generating:
-                        state.agent_thinking = False
-                        agent_done_thinking = True
-                        commit_agent_text_if_needed()
-                elif e.type == EventType.AGENT_SPEAKING:
-                    state.agent_speaking = e.speaking
-                    if e.speaking:
-                        agent_has_spoken = True
-                        # Only commit user text for real transcriptions
-                        if not force_text:
-                            state.commit_user_transcription(job.transcription)
-                        commit_agent_text_if_needed()
-                        current_transcription = ""
-        except asyncio.CancelledError:
-            await job.acancel()
-
     async def audio_stream_task():
+        while 1:
+            logging.getLogger().info(f'1')
         async for audio_frame_event in audio_stream:
+            logging.getLogger().info(f'开始捕获音频帧: {type(audio_frame_event.frame)}')
             stt_stream.push_frame(audio_frame_event.frame)
 
     async def video_capture_task():
