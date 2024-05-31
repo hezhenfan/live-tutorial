@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from builtins import BaseExceptionGroup
 
 from dotenv import load_dotenv
@@ -16,6 +17,7 @@ from livekit.agents import (
 from plugins.asr import STT
 from state_manager import StateManager
 
+logger = logging.getLogger('kitt-plus agent')
 
 PROMPT = "You are KITT, a friendly voice assistant powered by LiveKit.  \
           Conversation should be personable, and be sure to ask follow up questions. \
@@ -124,6 +126,7 @@ async def entrypoint(job: JobContext):
 
     async def audio_stream_task():
         async for audio_frame_event in audio_stream:
+            logger.info(f'开始接收视频帧: {audio_frame_event.frame}')
             stt_stream.push_frame(audio_frame_event.frame)
 
     async def stt_stream_task():

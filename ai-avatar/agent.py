@@ -18,19 +18,9 @@ import os
 import sys
 sys.path.append(os.getcwd())
 from plugins.avatar import STT
-from state_manager import StateManager
 
-
-PROMPT = "You are KITT, a friendly voice assistant powered by LiveKit.  \
-          Conversation should be personable, and be sure to ask follow up questions. \
-          If your response is a question, please append a question mark symbol to the end of it.\
-          Don't respond with more than a few sentences."
-INTRO = "Hello, I am KITT, a friendly voice assistant powered by LiveKit Agents. \
-        You can find my source code in the top right of this screen if you're curious how I work. \
-        Feel free to ask me anything — I'm here to help! Just start talking or type in the chat."
-SIP_INTRO = "Hello, I am KITT, a friendly voice assistant powered by LiveKit Agents. \
-             Feel free to ask me anything — I'm here to help! Just start talking."
-SIP_ZH = "你好."
+logger = logging.getLogger('ai-avatar agent')
+logging.basicConfig(encoding='utf-8')
 
 
 async def entrypoint(job: JobContext):
@@ -45,13 +35,8 @@ async def entrypoint(job: JobContext):
     options_video.source = rtc.TrackSource.SOURCE_CAMERA
 
     # Plugins
-    stt = STT()
-    stt_stream = stt.stream()
-
-    # Agent state
-    state = StateManager(job.room, PROMPT)
-    inference_task: asyncio.Task | None = None
-    current_transcription = ""
+    # stt = STT()
+    # stt_stream = stt.stream()
 
     audio_stream_future = asyncio.Future[rtc.AudioStream]()
 
@@ -76,28 +61,38 @@ async def entrypoint(job: JobContext):
     await job.room.local_participant.publish_track(track, options)
     await job.room.local_participant.publish_track(video_track, options_video)
 
-    async def audio_stream_task():
+    async def test_task():
         while 1:
-            logging.getLogger().info(f'1')
-        async for audio_frame_event in audio_stream:
-            logging.getLogger().info(f'开始捕获音频帧: {type(audio_frame_event.frame)}')
-            stt_stream.push_frame(audio_frame_event.frame)
+            logging.getLogger().info(f'测试 2 ')
+            time.sleep(2)
 
-    async def video_capture_task():
-        while True:
-            video_frame = await stt_stream.output_queue.get()
-            video_source.capture_frame(video_frame)
-            time.sleep(0.04)
+    # async def audio_stream_task():
+    #     while 1:
+    #         logging.getLogger().info(f'测试 1')
+    #         time.sleep(2)
+    #     async for audio_frame_event in audio_stream:
+    #         logger.info(f'开始捕获音频帧: {type(audio_frame_event.frame)}')
+    #         stt_stream.push_frame(audio_frame_event.frame)
+
+    # async def video_capture_task():
+    #     while True:
+    #         video_frame = await stt_stream.output_queue.get()
+    #         video_source.capture_frame(video_frame)
+    #         time.sleep(0.04)
 
     try:
+        logger.info(f'第七')
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(audio_stream_task())
-            tg.create_task(video_capture_task())
+            logger.info(f'第八')
+            logging.getLogger().info(f'异步任务')
+            tg.create_task(test_task())
+            # tg.create_task(audio_stream_task())
+            # tg.create_task(video_capture_task())
     except BaseExceptionGroup as e:
         for exc in e.exceptions:
-            print("Exception: ", exc)
+            logger.info("Exception: ", exc)
     except Exception as e:
-        print("Exception: ", e)
+        logger.info("Exception: ", e)
 
 
 async def request_fnc(req: JobRequest) -> None:

@@ -163,6 +163,5 @@ cython_debug/
 .idea/
 nohup.out
 
-ai-avatar/plugins/audio2secc_deploy/
 ai-avatar/plugins/wav/
 ai-avatar/plugins/avi/
