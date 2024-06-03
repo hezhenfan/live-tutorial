@@ -36,6 +36,9 @@ from livekit.agents.utils import AudioBuffer, merge_frames
 
 from .audio2secc_deploy.inference_with_new_video import inference
 
+logger = logging.getLogger('stt')
+logging.basicConfig(encoding='utf-8')
+
 
 @dataclass
 class STTOptions:
@@ -132,23 +135,28 @@ class SpeechStream:
                             f.writeframes(all_bytes)
                         self._wav_queue.put_nowait(wav_file)
                         all_bytes = b''
+                        logger.info(f'存下一个音频文件')
 
         async def recv_task():
             nonlocal closing_ws
             while True:
                 data = await self._wav_queue.get()
+                logger.info(f'取一个wav音频文件')
                 self._wav_queue.task_done()
                 if isinstance(data, str):
                     video_file = self.temp_avi + f'{uuid.uuid4().hex}.avi'
                     try:
-                        inference(data, video_file)
+                        logger.info(f'开始推理')
+                        await asyncio.get_event_loop().run_in_executor(None, inference, data, video_file)
+                        logger.info(f'推理结束')
+                        self._avi_queue.put_nowait(video_file)
                     except Exception as e:
                         logging.error(f"failed to process audio: {e}")
-                    self._avi_queue.put_nowait(video_file)
 
         async def video_frame_task():
             while True:
                 data = await self._avi_queue.get()
+                logger.info(f'取一个avi视频文件')
                 self._avi_queue.task_done()
                 if isinstance(data, str):
                     cap = cv2.VideoCapture(data)

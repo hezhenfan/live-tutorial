@@ -3,6 +3,7 @@ import json
 import logging
 import time
 
+import torch
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -17,6 +18,7 @@ from livekit.agents import (
 import os
 import sys
 sys.path.append(os.getcwd())
+sys.path.append('/home/ecs-user/code/ai-livetutorial/ai-avatar/plugins/audio2secc_deploy')
 from plugins.avatar import STT
 
 logger = logging.getLogger('ai-avatar agent')
@@ -35,8 +37,8 @@ async def entrypoint(job: JobContext):
     options_video.source = rtc.TrackSource.SOURCE_CAMERA
 
     # Plugins
-    # stt = STT()
-    # stt_stream = stt.stream()
+    stt = STT()
+    stt_stream = stt.stream()
 
     audio_stream_future = asyncio.Future[rtc.AudioStream]()
 
@@ -61,33 +63,23 @@ async def entrypoint(job: JobContext):
     await job.room.local_participant.publish_track(track, options)
     await job.room.local_participant.publish_track(video_track, options_video)
 
-    async def test_task():
-        while 1:
-            logging.getLogger().info(f'测试 2 ')
-            time.sleep(2)
+    async def audio_stream_task():
+        async for audio_frame_event in audio_stream:
+            # logger.info(f'开始捕获音频帧: {type(audio_frame_event.frame)}')
+            stt_stream.push_frame(audio_frame_event.frame)
 
-    # async def audio_stream_task():
-    #     while 1:
-    #         logging.getLogger().info(f'测试 1')
-    #         time.sleep(2)
-    #     async for audio_frame_event in audio_stream:
-    #         logger.info(f'开始捕获音频帧: {type(audio_frame_event.frame)}')
-    #         stt_stream.push_frame(audio_frame_event.frame)
-
-    # async def video_capture_task():
-    #     while True:
-    #         video_frame = await stt_stream.output_queue.get()
-    #         video_source.capture_frame(video_frame)
-    #         time.sleep(0.04)
+    async def video_capture_task():
+        while True:
+            logger.info(f'捕获一个视频帧')
+            video_frame = await stt_stream.output_queue.get()
+            video_source.capture_frame(video_frame)
+            time.sleep(0.04)
 
     try:
-        logger.info(f'第七')
         async with asyncio.TaskGroup() as tg:
-            logger.info(f'第八')
             logging.getLogger().info(f'异步任务')
-            tg.create_task(test_task())
-            # tg.create_task(audio_stream_task())
-            # tg.create_task(video_capture_task())
+            tg.create_task(audio_stream_task())
+            tg.create_task(video_capture_task())
     except BaseExceptionGroup as e:
         for exc in e.exceptions:
             logger.info("Exception: ", exc)
@@ -100,4 +92,5 @@ async def request_fnc(req: JobRequest) -> None:
 
 
 if __name__ == "__main__":
+    torch.multiprocessing.set_start_method("spawn")
     cli.run_app(WorkerOptions(request_fnc=request_fnc))
