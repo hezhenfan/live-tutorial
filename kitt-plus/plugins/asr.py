@@ -300,7 +300,8 @@ class SpeechStream(stt.SpeechStream):
 
                     headers = {"Authorization": f"Token {self._api_key}"}
 
-                    url = f"wss://api.deepgram.com/v1/listen?{urlencode(live_config).lower()}"
+                    # url = f"wss://api.deepgram.com/v1/listen?{urlencode(live_config).lower()}"
+                    url = f'{os.environ.get("STT_URL")}/stt/listen'
                     ws = await self._session.ws_connect(url, headers=headers)
                     retry_count = 0  # connected successfully, reset the retry_count
 
