@@ -28,7 +28,7 @@ INTRO = "Hello, I am KITT, a friendly voice assistant powered by LiveKit Agents.
         Feel free to ask me anything — I'm here to help! Just start talking or type in the chat."
 SIP_INTRO = "Hello, I am KITT, a friendly voice assistant powered by LiveKit Agents. \
              Feel free to ask me anything — I'm here to help! Just start talking."
-SIP_ZH = "你好."
+SIP_ZH = "你好, 我是虚拟老师kitt."
 
 
 async def entrypoint(job: JobContext):
@@ -126,7 +126,6 @@ async def entrypoint(job: JobContext):
 
     async def audio_stream_task():
         async for audio_frame_event in audio_stream:
-            logger.info(f'开始接收视频帧: {audio_frame_event.frame}')
             stt_stream.push_frame(audio_frame_event.frame)
 
     async def stt_stream_task():
